@@ -1,0 +1,74 @@
+version: '3.8'
+
+# Загальні змінні середовища для всіх C# сервісів
+x-app-env: &app-env
+  # Рядок підключення. Host=db вказує на контейнер бази даних.
+  ASPNETCORE_CONNECTIONSTRINGS__DefaultConnection: "Host=db;Port=5432;Database=slar_application_db;Username=postgres;Password=supersecret"
+  ASPNETCORE_URLS: "http://+:8080" # Внутрішній порт контейнера
+
+services:
+  # 1. База Даних (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: slar_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: slar_application_db
+    ports: ["5432:5432"] 
+    volumes:
+      - slar_db_data:/var/lib/postgresql/data
+    
+    # КРИТИЧНО: Перевірка здоров'я для синхронізації
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d slar_application_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # 2. Балансувальник Навантаження (Nginx)
+  nginx:
+    image: nginx:latest
+    container_name: slar_nginx
+    volumes:
+      - ./load_balancer.conf:/etc/nginx/nginx.conf:ro
+    ports: ["80:80"] # Клієнт підключається до localhost:80
+    depends_on:
+      - api-1
+      - api-2
+    # Nginx чекатиме, поки API-сервери будуть запущені
+    restart: always
+
+  # 3. API Gateway та Worker (Інстанс 1)
+  api-1:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: slar_api_1
+    environment:
+      <<: *app-env
+      ASPNETCORE_ENVIRONMENT: Development
+      IsWorkerEnabled: "true" 
+    # НЕ відкриваємо порт на хості, тільки для внутрішньої мережі
+    depends_on: 
+      db:
+        condition: service_healthy 
+
+  # 4. API Gateway та Worker (Інстанс 2)
+  api-2:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: slar_api_2
+    environment:
+      <<: *app-env
+      ASPNETCORE_ENVIRONMENT: Development
+      IsWorkerEnabled: "true" 
+    # НЕ відкриваємо порт на хості
+    depends_on: 
+      db:
+        condition: service_healthy 
+
+volumes:
+  slar_db_data:
