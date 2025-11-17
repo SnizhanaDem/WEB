@@ -1,0 +1,87 @@
+# -------------------------------------------------------------
+
+# Visual Studio / Visual Studio Code
+
+# -------------------------------------------------------------
+
+# Binaries
+
+[Bb]in/
+[Oo]bj/
+_.pdb
+_.suo
+_.user
+_.userosscache
+_.sln.docstates
+_.vssscc
+_.vspscc
+_.bak
+_.log
+_.ncb
+_.resource
+_.sdf
+_.opensdf
+_.sqlite
+\*.sqlite-journal
+
+# Visual Studio Code specific files
+
+.vscode/\*
+!/.vscode/settings.json
+!/.vscode/tasks.json
+!/.vscode/launch.json
+!/.vscode/extensions.json
+
+# -------------------------------------------------------------
+
+# .NET Core / NuGet / Build Artifacts
+
+# -------------------------------------------------------------
+
+# NuGet packages directory
+
+.nuget/
+
+# All build output directories
+
+**/[Bb]in/
+**/[Oo]bj/
+
+# Test results
+
+TestResults/
+
+# Packages folder
+
+packages/
+
+# NuGet cache
+
+_.nupkg
+_.snk
+
+# -------------------------------------------------------------
+
+# Entity Framework Core (EF Core)
+
+# -------------------------------------------------------------
+
+# EF Core migration snapshots (used for migrations only, not part of actual code)
+
+\*_/Migrations/_.Designer.cs
+
+# -------------------------------------------------------------
+
+# Docker and Infrastructure
+
+# -------------------------------------------------------------
+
+# Ignore build contexts and temporary files
+
+_.tmp
+_.bak
+
+# Ignore the results of 'dotnet publish' if not handled by Docker
+
+/app/
+/publish/
