@@ -4,7 +4,7 @@ version: '3.8'
 x-app-env: &app-env
   # Рядок підключення. Host=db вказує на контейнер бази даних.
   ASPNETCORE_CONNECTIONSTRINGS__DefaultConnection: "Host=db;Port=5432;Database=slar_application_db;Username=postgres;Password=supersecret"
-  ASPNETCORE_URLS: "http://+:8080" # Внутрішній порт контейнера
+  ASPNETCORE_URLS: "http://+:8080" 
 
 services:
   # 1. База Даних (PostgreSQL)
@@ -19,7 +19,6 @@ services:
     volumes:
       - slar_db_data:/var/lib/postgresql/data
     
-    # КРИТИЧНО: Перевірка здоров'я для синхронізації
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d slar_application_db"]
       interval: 5s
@@ -33,14 +32,14 @@ services:
     container_name: slar_nginx
     volumes:
       - ./load_balancer.conf:/etc/nginx/nginx.conf:ro
-    ports: ["80:80"] # Клієнт підключається до localhost:80
+    ports: ["80:80"] 
     depends_on:
       - api-1
       - api-2
     # Nginx чекатиме, поки API-сервери будуть запущені
     restart: always
 
-  # 3. API Gateway та Worker (Інстанс 1)
+  # 3. API Gateway та Worker 
   api-1:
     build: 
       context: .
@@ -50,12 +49,11 @@ services:
       <<: *app-env
       ASPNETCORE_ENVIRONMENT: Development
       IsWorkerEnabled: "true" 
-    # НЕ відкриваємо порт на хості, тільки для внутрішньої мережі
     depends_on: 
       db:
         condition: service_healthy 
 
-  # 4. API Gateway та Worker (Інстанс 2)
+  # 4. API Gateway та Worker 
   api-2:
     build: 
       context: .
@@ -65,7 +63,6 @@ services:
       <<: *app-env
       ASPNETCORE_ENVIRONMENT: Development
       IsWorkerEnabled: "true" 
-    # НЕ відкриваємо порт на хості
     depends_on: 
       db:
         condition: service_healthy 

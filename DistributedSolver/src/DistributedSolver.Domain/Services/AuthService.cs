@@ -2,10 +2,10 @@
 
 using DistributedSolver.Domain.Models;
 using DistributedSolver.Domain.Dtos;
-using System.Security.Claims; // <--- Потрібно для ClaimTypes та Claim
+using System.Security.Claims;
 using System.Text;
-using Microsoft.IdentityModel.Tokens; // <--- Потрібно для SymmetricSecurityKey, SigningCredentials
-using System.IdentityModel.Tokens.Jwt; // <--- Потрібно для JwtSecurityToken, JwtRegisteredClaimNames, JwtSecurityTokenHandler
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Configuration;
 
 namespace DistributedSolver.Domain.Services
@@ -23,6 +23,43 @@ namespace DistributedSolver.Domain.Services
 
         public async Task<UserModel> RegisterAsync(string email, string password)
         {
+            // Валідація email та пароля
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new ArgumentException("Email cannot be empty.", nameof(email));
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                throw new ArgumentException("Password cannot be empty.", nameof(password));
+            }
+
+            email = email.Trim();
+
+            // Валідація формату email
+            if (!IsValidEmail(email))
+            {
+                throw new ArgumentException("Invalid email format. Expected: user@example.com", nameof(email));
+            }
+
+            // Валідація довжини email
+            if (email.Length > 254)
+            {
+                throw new ArgumentException("Email is too long (max 254 characters).", nameof(email));
+            }
+
+            // Валідація довжини пароля
+            if (password.Length < 6)
+            {
+                throw new ArgumentException("Password must be at least 6 characters.", nameof(password));
+            }
+
+            if (password.Length > 128)
+            {
+                throw new ArgumentException("Password is too long (max 128 characters).", nameof(password));
+            }
+
+            // Перевірка чи користувач вже існує
             var existing = await _userRepository.GetByEmailAsync(email);
             if (existing != null)
             {
@@ -44,6 +81,20 @@ namespace DistributedSolver.Domain.Services
             return user;
         }
 
+        // Допоміжний метод для валідації email
+        private bool IsValidEmail(string email)
+        {
+            try
+            {
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public async Task<string> LoginAsync(string email, string password)
         {
             var user = await _userRepository.GetByEmailAsync(email);
@@ -58,6 +109,11 @@ namespace DistributedSolver.Domain.Services
             }
 
             return GenerateJwtToken(user);
+        }
+
+        public async Task<UserModel?> GetUserByEmailAsync(string email)
+        {
+            return await _userRepository.GetByEmailAsync(email);
         }
 
         private string GenerateJwtToken(UserModel user)

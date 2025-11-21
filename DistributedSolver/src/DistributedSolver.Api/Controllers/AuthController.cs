@@ -20,12 +20,28 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        var user = await _authService.RegisterAsync(request.Email, request.Password);
-        // Після реєстрації одразу генеруємо JWT для новоствореного користувача
-        var token = _authService.GenerateToken(user);
+        try
+        {
+            var user = await _authService.RegisterAsync(request.Email, request.Password);
+            // Після реєстрації одразу генеруємо JWT для новоствореного користувача
+            var token = _authService.GenerateToken(user);
 
-        // Повертаємо токен та дані користувача
-        return Ok(_authService.GenerateAuthResponse(user, token));
+            // Повертаємо токен та дані користувача
+            return Ok(_authService.GenerateAuthResponse(user, token));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Користувач вже існує
+            return BadRequest(new { Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Error = "An error occurred during registration: " + ex.Message });
+        }
     }
 
     [HttpPost("login")]
@@ -35,8 +51,12 @@ public class AuthController : ControllerBase
         {
             var token = await _authService.LoginAsync(request.Email, request.Password);
 
-            // Для повного AuthResponse потрібно отримати UserModel з БД, тут спрощено
-            var user = new DistributedSolver.Domain.Models.UserModel { Id = Guid.NewGuid(), Email = request.Email, Role = "User" };
+            // Отримуємо користувача для того, щоб повернути його роль
+            var user = await _authService.GetUserByEmailAsync(request.Email);
+            if (user == null)
+            {
+                return Unauthorized(new { Error = "User not found after login" });
+            }
 
             return Ok(_authService.GenerateAuthResponse(user, token));
         }

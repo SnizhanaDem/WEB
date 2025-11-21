@@ -26,7 +26,6 @@ public class ApplicationDbContext : DbContext
         // Конфігурація та індекси для TaskModel
         modelBuilder.Entity<TaskModel>(entity =>
         {
-            // Виправлення CS0618: Використання HasDatabaseName замість застарілого HasName
             entity.HasIndex(e => e.Status)
                 .HasDatabaseName("idx_tasks_pending")
                 .HasFilter($@"""{nameof(TaskModel.Status)}"" = 'PENDING'");

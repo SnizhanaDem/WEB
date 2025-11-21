@@ -9,6 +9,7 @@ namespace DistributedSolver.Domain.Services
     {
         Task<UserModel> RegisterAsync(string email, string password);
         Task<string> LoginAsync(string email, string password);
+        Task<UserModel?> GetUserByEmailAsync(string email);
         string GenerateToken(UserModel user);
         AuthResponse GenerateAuthResponse(UserModel user, string token);
     }

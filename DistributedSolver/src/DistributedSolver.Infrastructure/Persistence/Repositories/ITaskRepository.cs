@@ -8,8 +8,6 @@ namespace DistributedSolver.Infrastructure.Persistence.Repositories
     {
         /// <summary>
         /// Спроба отримати наступне завдання зі статусом PENDING для обробки.
-        /// Цей метод повинен використовувати механізм блокування (наприклад, SELECT FOR UPDATE SKIP LOCKED)
-        /// для забезпечення того, що тільки один Worker може взяти це завдання.
         /// </summary>
         /// <returns>Завдання, яке потрібно обробити, або null, якщо завдання відсутні.</returns>
         Task<TaskModel?> TryGetNextPendingTaskAsync(CancellationToken cancellationToken = default);
@@ -31,5 +29,10 @@ namespace DistributedSolver.Infrastructure.Persistence.Repositories
         /// Встановлює статус завдання на CANCEL_REQUESTED.
         /// </summary>
         Task<bool> TryRequestCancelAsync(Guid taskId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Отримати всі задачі в системі (для адміністратора).
+        /// </summary>
+        Task<IEnumerable<TaskModel>> GetAllTasksAsync(CancellationToken cancellationToken = default);
     }
 }

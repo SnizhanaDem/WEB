@@ -1,14 +1,10 @@
 using System.Text.Json;
 using DistributedSolver.Domain.Models;
 using DistributedSolver.Infrastructure.Persistence.Repositories;
-using MathNet.Numerics;
-using MathNet.Numerics.LinearAlgebra;
 using static DistributedSolver.Domain.Enums.TaskStatus;
-using Vector = MathNet.Numerics.LinearAlgebra.Vector<double>;
 
 namespace DistributedSolver.Api.Workers;
 
-// IHostedService / BackgroundService — це стандартний спосіб створення фонових потоків у ASP.NET Core
 public class TaskQueueWorker : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
@@ -28,20 +24,19 @@ public class TaskQueueWorker : BackgroundService
         {
             try
             {
-                // Для роботи з DbContext та репозиторіями нам потрібна нова область видимості (scope), 
-                // оскільки BackgroundService є Singleton, а репозиторій — Scoped.
+
                 using (var scope = _serviceProvider.CreateScope())
                 {
                     var repository = scope.ServiceProvider.GetRequiredService<ITaskRepository>();
 
-                    // 1. Спроба захоплення завдання з черги (використовує SKIP LOCKED)
+                    // 1. Спроба захоплення завдання з черги 
                     var task = await repository.TryGetNextPendingTaskAsync(stoppingToken);
 
                     if (task != null)
                     {
                         _logger.LogInformation("Processing Task {TaskId} (Size: {Size}).", task.Id, task.MatrixSize);
 
-                        // 2. Виконання трудомісткої задачі (СЛАР)
+                        // 2. Виконання трудомісткої задачі 
                         await ProcessTaskAsync(task, repository, stoppingToken);
 
                         _logger.LogInformation("Task {TaskId} completed.", task.Id);
@@ -63,7 +58,6 @@ public class TaskQueueWorker : BackgroundService
         _logger.LogInformation("Task Queue Worker stopped.");
     }
 
-    // TODO: Реалізувати метод обчислення СЛАР
     private async Task ProcessTaskAsync(TaskModel task, ITaskRepository repository, CancellationToken cancellationToken)
     {
         // Оскільки task.Status вже встановлено на PROCESSING у репозиторії, ми одразу починаємо обчислення.
@@ -84,33 +78,25 @@ public class TaskQueueWorker : BackgroundService
                 return;
             }
 
-            // 2. Десеріалізація вхідних даних
-            var A_data = JsonSerializer.Deserialize<double[][]>(task.InputMatrixA);
-            var B_data = JsonSerializer.Deserialize<double[]>(task.InputVectorB);
+            // 2. Обчислення N-Queens (кількість можливих розв'язків)
+            int n = task.MatrixSize;
 
-            if (A_data == null || B_data == null)
-            {
-                throw new InvalidOperationException("Invalid matrix or vector data found.");
-            }
-
-            // 3. Перетворення даних у формат MathNet.Numerics
-            var matrixA = Matrix<double>.Build.DenseOfRows(A_data);
-            var vectorB = Vector<double>.Build.Dense(B_data);
-
-            // 4. Оновлення статусу виконання (прогрес 5%) - Початок обчислення
+            // Оновлення прогресу на початку
             task.ProgressPercent = 5;
             await repository.UpdateTaskAsync(task, cancellationToken);
 
-            // 5. Обчислення розв'язку (високе CPU-навантаження)
-            // Math.NET використовує LU-декомпозицію, яка є швидкою і ефективною.
-            Vector<double> vectorX = matrixA.Solve(vectorB);
+            // Плавний прогрес
+            long solutions = 0;
+            solutions = await CountNQueensWithProgress(n, cancellationToken, async percent =>
+            {
+                if (percent < 100)
+                {
+                    task.ProgressPercent = percent;
+                    await repository.UpdateTaskAsync(task, cancellationToken);
+                }
+            });
 
-            // 6. Оновлення статусу виконання (прогрес 50%)
-            task.ProgressPercent = 50;
-            await repository.UpdateTaskAsync(task, cancellationToken);
-
-            // 7. Перевірка скасування (після тривалого обчислення, якщо б воно було ітераційним)
-            // Хоча для Math.NET це один крок, це залишається як шаблон для переривання.
+            // Перевірка скасування після обчислення
             var finalCheckTask = await repository.GetTaskByIdAsync(task.Id, cancellationToken);
             if (finalCheckTask?.Status == CANCEL_REQUESTED)
             {
@@ -121,31 +107,24 @@ public class TaskQueueWorker : BackgroundService
                 return;
             }
 
-            // 8. Фіналізація: Серіалізація результату
-            var resultJson = JsonSerializer.Serialize(vectorX.ToArray());
-
+            // Фіналізація
             task.Status = DONE;
             task.ProgressPercent = 100;
-            task.ResultVectorX = resultJson;
+            task.ResultVectorX = JsonSerializer.Serialize(solutions);
             task.TimeFinished = DateTime.UtcNow;
 
             await repository.UpdateTaskAsync(task, cancellationToken);
-            _logger.LogInformation("Task {TaskId} completed successfully.", task.Id);
+            _logger.LogInformation("Task {TaskId} completed successfully. Solutions: {Count}", task.Id, solutions);
         }
-        catch (Exception ex) when (ex.Message.Contains("singular"))
+        catch (OperationCanceledException)
         {
-            // 9. Обробка помилок (Наприклад, матриця вироджена, і розв'язку немає)
-            _logger.LogError(ex, "Task {TaskId} failed due to singular matrix.", task.Id);
-
-            task.Status = ERROR;
+            _logger.LogInformation("Task {TaskId} processing was cancelled by token.", task.Id);
+            task.Status = CANCELLED;
             task.TimeFinished = DateTime.UtcNow;
-            task.ResultVectorX = "ERROR: Matrix is singular (determinant is zero) or computationally near-singular.";
-
             await repository.UpdateTaskAsync(task, cancellationToken);
         }
         catch (Exception ex)
         {
-            // 10. Загальна обробка помилок
             _logger.LogError(ex, "Task {TaskId} failed due to an unexpected error.", task.Id);
 
             task.Status = ERROR;
@@ -155,4 +134,72 @@ public class TaskQueueWorker : BackgroundService
             await repository.UpdateTaskAsync(task, cancellationToken);
         }
     }
+
+    // Плавний прогрес для N-Queens
+    private async Task<long> CountNQueensWithProgress(int n, CancellationToken cancellationToken, Func<int, Task> progressCallback)
+    {
+        if (n <= 0) { await progressCallback(100); return 0; }
+        if (n == 1) { await progressCallback(100); return 1; }
+
+        long count = 0;
+        ulong all = (1UL << n) - 1UL;
+        long totalIterations = 0;
+        long solutionsFound = 0;
+        int lastPercent = 0;
+
+        async Task Solve(ulong cols, ulong d1, ulong d2, int depth)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (cols == all)
+            {
+                count++;
+                solutionsFound++;
+                int percent = Math.Min(95, 10 + (int)(solutionsFound * 85 / Math.Max(1, GetEstimatedSolutions(n))));
+                if (percent > lastPercent && progressCallback != null)
+                {
+                    lastPercent = percent;
+                    await progressCallback(percent);
+                }
+                return;
+            }
+
+            ulong avail = ~(cols | d1 | d2) & all;
+            while (avail != 0)
+            {
+                ulong bit = avail & (ulong)(-(long)avail);
+                avail -= bit;
+                totalIterations++;
+
+                await Solve(cols | bit, (d1 | bit) << 1, (d2 | bit) >> 1, depth + 1);
+            }
+        }
+
+        await Solve(0, 0, 0, 0);
+        await progressCallback(100);
+        return count;
+    }
+
+    // Відома кількість рішень для N-Queens
+    private long GetEstimatedSolutions(int n) => n switch
+    {
+        1 => 1,
+        2 => 0,
+        3 => 0,
+        4 => 2,
+        5 => 10,
+        6 => 4,
+        7 => 40,
+        8 => 92,
+        9 => 352,
+        10 => 724,
+        11 => 2680,
+        12 => 14200,
+        13 => 73712,
+        14 => 365596,
+        15 => 2279184,
+        16 => 14772512,
+        17 => 95815104,
+        _ => (long)Math.Pow(n, n) // приблизна оцінка для великих N
+    };
 }

@@ -32,14 +32,14 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddScoped<ITaskRepository, TaskRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<DistributedSolver.Domain.Repositories.IUserRepository, DistributedSolver.Infrastructure.Persistence.Repositories.UserRepository>();
-builder.Services.AddHostedService<TaskQueueWorker>(); // Реєстрація Worker
+builder.Services.AddHostedService<TaskQueueWorker>();
 
 builder.Services.AddControllers();
 builder.Services.AddRazorPages();
 builder.Services.AddEndpointsApiExplorer();
 
 // -------------------------------------------------------------
-// 2) КОНФІГУРАЦІЯ JWT (Вимога 4)
+// 2) КОНФІГУРАЦІЯ JWT 
 // -------------------------------------------------------------
 var authSettings = builder.Configuration.GetSection("AuthSettings");
 var key = Encoding.ASCII.GetBytes(authSettings["Secret"]!);
@@ -101,9 +101,8 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // -------------------------------------------------------------
-// 4) Автоматичне застосування міграцій при старті (Retry Loop)
+// 4) Автоматичне застосування міграцій при старті 
 // -------------------------------------------------------------
-// ВИПРАВЛЕНО: Додано using (var scope = ...)
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -120,7 +119,6 @@ using (var scope = app.Services.CreateScope())
             var db = services.GetRequiredService<ApplicationDbContext>();
             db.Database.Migrate();
 
-            // Seed a test user that AuthService.Login returns (used in local testing).
             try
             {
                 var testUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -142,6 +140,40 @@ using (var scope = app.Services.CreateScope())
             {
                 logger.LogWarning(ex, "Failed to seed test user (non-fatal).");
             }
+
+            try
+            {
+                var adminEmail = "sniz@gmail.com";
+                var adminExists = db.Users.Any(u => u.Email == adminEmail);
+                if (!adminExists)
+                {
+                    var passwordHash = BCrypt.Net.BCrypt.HashPassword("11111111");
+                    db.Users.Add(new UserModel
+                    {
+                        Id = Guid.NewGuid(),
+                        Email = adminEmail,
+                        PasswordHash = passwordHash,
+                        Role = "Admin",
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    db.SaveChanges();
+                    logger.LogInformation("Seeded admin user {Email}", adminEmail);
+                }
+                else
+                {
+                    var admin = db.Users.FirstOrDefault(u => u.Email == adminEmail);
+                    if (admin != null && admin.Role != "Admin")
+                    {
+                        admin.Role = "Admin";
+                        db.SaveChanges();
+                        logger.LogInformation("Updated user {Email} role to Admin", adminEmail);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to seed admin user (non-fatal).");
+            }
             logger.LogInformation("Database migration completed successfully.");
             break;
         }
@@ -162,13 +194,10 @@ using (var scope = app.Services.CreateScope())
     }
 }
 // -------------------------------------------------------------
-
-// Serve static SPA files from wwwroot
+//Вмикає обслуговування статичних файлів (HTML, CSS, JS, зображення)
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// -------------------------------------------------------------
-// 5) Налаштування пайплайна HTTP
 // -------------------------------------------------------------
 if (app.Environment.IsDevelopment())
 {

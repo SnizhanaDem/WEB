@@ -44,21 +44,15 @@
       </section>
 
       <section id="submit" class="mb-4">
-        <h3>Подача задачі</h3>
-        <p class="small text-muted">Введіть розмір матриці та JSON для матриці A та вектора B.</p>
+        <h3>Подача задачі N-Queens</h3>
+        <p class="small text-muted">Вкажіть `N` — розмір дошки (1..16). Результат: кількість розв'язків.</p>
         <div class="mb-2">
-          <input id="matrix-size" type="number" class="form-control" placeholder="MatrixSize (наприклад 2)" />
-        </div>
-        <div class="mb-2">
-          <label class="form-label">Matrix A (JSON)</label>
-          <textarea id="matrix-a" class="form-control" rows="4">[[4.0,2.0],[1.0,3.0]]</textarea>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">Vector B (JSON)</label>
-          <textarea id="vector-b" class="form-control" rows="2">[6.0,5.0]</textarea>
+          <input id="matrix-size" type="number" class="form-control" placeholder="N (наприклад 8)" />
         </div>
         <button id="btn-submit" class="btn btn-success">Submit Task</button>
+        <button id="btn-queue-info" class="btn btn-info ms-2">Інформація про чергу</button>
         <div id="submit-result" class="mt-3"></div>
+        <div id="queue-info" class="mt-3"></div>
       </section>
 
       <section id="status" class="mb-4">
@@ -66,6 +60,7 @@
         <div class="input-group mb-2">
           <input id="status-id" class="form-control" placeholder="TaskId (GUID)" />
           <button id="btn-status" class="btn btn-outline-secondary">Get Status</button>
+          <button id="btn-cancel" class="btn btn-outline-danger ms-2">Cancel Task</button>
         </div>
         <pre id="status-result" class="bg-light p-3"></pre>
       </section>

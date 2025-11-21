@@ -6,7 +6,7 @@ public class TaskModel
     public Guid UserId { get; set; }
     public UserModel? User { get; set; } // Навігаційна властивість
 
-    // Вхідні дані для СЛАР
+    // Вхідні дані 
     public string InputMatrixA { get; set; } = string.Empty;
     public string InputVectorB { get; set; } = string.Empty;
     public int MatrixSize { get; set; }
